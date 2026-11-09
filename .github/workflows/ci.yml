@@ -59,9 +59,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Apply migrations
+      - name: Generate Prisma client and apply migrations
         working-directory: apps/server
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
       - run: npm run test:integration
 
   build:
