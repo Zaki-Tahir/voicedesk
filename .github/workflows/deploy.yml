@@ -1,0 +1,119 @@
+name: Deploy
+
+# Deploys main to staging after CI passes. Run manually to deploy a specific ref to production.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # for AWS OIDC
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CLUSTER: voicedesk-${{ inputs.environment || 'staging' }}
+      FAMILY_PREFIX: voicedesk-${{ inputs.environment || 'staging' }}
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.IMAGE_TAG }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/voicedesk/server:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=server
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/voicedesk/web:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=web
+
+      - name: Render task definitions with the new images
+        env:
+          SERVER_IMAGE: ${{ steps.ecr.outputs.registry }}/voicedesk/server:${{ env.IMAGE_TAG }}
+          WEB_IMAGE: ${{ steps.ecr.outputs.registry }}/voicedesk/web:${{ env.IMAGE_TAG }}
+        run: |
+          for app in api worker migrate web; do
+            image="$SERVER_IMAGE"; [ "$app" = web ] && image="$WEB_IMAGE"
+            aws ecs describe-task-definition --task-definition "$FAMILY_PREFIX-$app" --query taskDefinition \
+              | jq --arg image "$image" '
+                  .containerDefinitions[0].image = $image
+                  | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
+                        .registeredAt, .registeredBy)' > "task-$app.json"
+          done
+
+      - name: Run database migrations
+        run: |
+          td=$(aws ecs register-task-definition --cli-input-json file://task-migrate.json \
+                 --query taskDefinition.taskDefinitionArn --output text)
+          task=$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$td" --launch-type FARGATE \
+                 --network-configuration "awsvpcConfiguration={subnets=[${{ vars.PRIVATE_SUBNETS }}],securityGroups=[${{ vars.TASK_SECURITY_GROUP }}]}" \
+                 --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $task"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$task"
+          code=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task" --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$code" != "0" ]; then echo "::error::Migrations failed (exit $code)"; exit 1; fi
+
+      - name: Deploy worker
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: task-worker.json
+          cluster: ${{ env.CLUSTER }}
+          service: worker
+          wait-for-service-stability: true
+
+      - name: Deploy API
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: task-api.json
+          cluster: ${{ env.CLUSTER }}
+          service: api
+          wait-for-service-stability: true
+
+      - name: Deploy dashboard
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: task-web.json
+          cluster: ${{ env.CLUSTER }}
+          service: web
+          wait-for-service-stability: true
+
+      - name: Smoke test
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 "https://${{ vars.API_HOST }}/readyz"
