@@ -1,5 +1,7 @@
 # VoiceDesk
 
+[![CI](https://github.com/Zaki-Tahir/voicedesk/actions/workflows/ci.yml/badge.svg)](https://github.com/Zaki-Tahir/voicedesk/actions/workflows/ci.yml)
+
 An AI receptionist for small businesses. It answers the business's phone line, holds a natural
 conversation, checks real availability, books the appointment on the owner's Google Calendar and
 texts the caller a confirmation. The owner sees every call, its transcript and an AI summary in a
