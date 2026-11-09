@@ -5,12 +5,12 @@ export type Weekday = (typeof WEEKDAYS)[number];
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:mm");
 
-/** Weekly opening hours. Each day holds zero or more [open, close] ranges. */
+/** Each day holds zero or more [open, close] ranges, e.g. [["09:00", "12:00"], ["13:00", "17:00"]]. */
+const day = z.array(z.tuple([time, time])).default([]);
+
+/** Weekly opening hours. */
 export const weeklyHoursSchema = z
-  .object(Object.fromEntries(WEEKDAYS.map((d) => [d, z.array(z.tuple([time, time])).default([])])) as Record<
-    Weekday,
-    z.ZodDefault<z.ZodArray<z.ZodTuple<[typeof time, typeof time]>>>
-  >)
+  .object({ mon: day, tue: day, wed: day, thu: day, fri: day, sat: day, sun: day })
   .superRefine((hours, ctx) => {
     for (const day of WEEKDAYS) {
       for (const [open, close] of hours[day]) {
