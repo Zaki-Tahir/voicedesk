@@ -1,0 +1,71 @@
+# Local development: `docker compose up -d postgres redis`, then run the apps with `npm run dev`.
+# `docker compose --profile app up --build` runs everything in containers instead.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: voicedesk
+      POSTGRES_PASSWORD: voicedesk
+      POSTGRES_DB: voicedesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voicedesk"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  server:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    env_file: apps/server/.env
+    environment:
+      DATABASE_URL: postgresql://voicedesk:voicedesk@postgres:5432/voicedesk
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    command: ["node", "dist/worker.js"]
+    env_file: apps/server/.env
+    environment:
+      DATABASE_URL: postgresql://voicedesk:voicedesk@postgres:5432/voicedesk
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file: apps/web/.env
+    environment:
+      API_URL: http://server:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
