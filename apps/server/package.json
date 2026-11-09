@@ -1,0 +1,44 @@
+{
+  "name": "@voicedesk/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "start:worker": "node dist/worker.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src",
+    "test:integration": "vitest run --dir test/integration",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
+    "pino-pretty": "^13.2.0",
+    "prisma": "^6.19.3",
+    "tsx": "^4.23.15",
+    "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.4.1",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/websocket": "^11.3.7",
+    "@googleapis/calendar": "^20.1.0",
+    "@prisma/client": "^6.19.3",
+    "bullmq": "^5.81.5",
+    "fastify": "^5.12.8",
+    "ioredis": "^5.11.1",
+    "luxon": "^3.7.2",
+    "openai": "^6.49.0",
+    "twilio": "^5.13.1",
+    "ws": "^8.22.2",
+    "zod": "^4.6.7"
+  }
+}

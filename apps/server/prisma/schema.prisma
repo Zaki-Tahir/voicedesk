@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id           String        @id @default(cuid())
+  name         String
+  /// E.164 number customers call, e.g. +12015550123. Used to route inbound calls.
+  phoneNumber  String        @unique
+  timezone     String        @default("America/New_York")
+  greeting     String
+  /// Extra instructions for the agent (parking, cancellation policy, etc.)
+  notes        String        @default("")
+  /// Weekly opening hours: { "mon": [["09:00","17:00"]], "sat": [], ... }
+  hours        Json
+  calendarId   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  services     Service[]
+  calls        Call[]
+  appointments Appointment[]
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  businessId   String
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name         String
+  durationMin  Int
+  priceCents   Int?
+  active       Boolean       @default(true)
+  appointments Appointment[]
+
+  @@unique([businessId, name])
+}
+
+enum CallStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model Call {
+  id           String        @id @default(cuid())
+  businessId   String
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  twilioSid    String        @unique
+  fromNumber   String
+  status       CallStatus    @default(IN_PROGRESS)
+  startedAt    DateTime      @default(now())
+  endedAt      DateTime?
+  /// Array of { role: "caller" | "agent", text: string, at: ISO string }
+  transcript   Json          @default("[]")
+  summary      String?
+  appointments Appointment[]
+
+  @@index([businessId, startedAt])
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  FAILED
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  businessId      String
+  business        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service           @relation(fields: [serviceId], references: [id])
+  callId          String?
+  call            Call?             @relation(fields: [callId], references: [id])
+  customerName    String
+  customerPhone   String
+  startsAt        DateTime
+  endsAt          DateTime
+  status          AppointmentStatus @default(PENDING)
+  calendarEventId String?
+  createdAt       DateTime          @default(now())
+
+  /// A business can't have two appointments starting at the same moment.
+  @@unique([businessId, startsAt])
+  @@index([businessId, startsAt, endsAt])
+}
