@@ -14,3 +14,7 @@ coverage/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+
+# next.js
+next-env.d.ts
+*.tsbuildinfo

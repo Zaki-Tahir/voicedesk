@@ -15,7 +15,8 @@
     "test:integration": "vitest run --dir test/integration --no-file-parallelism",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:demo": "tsx prisma/seed.ts --demo"
   },
   "devDependencies": {
     "@types/luxon": "^3.7.6",
