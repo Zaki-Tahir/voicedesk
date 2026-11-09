@@ -1,0 +1,9 @@
+environment       = "staging"
+aws_region        = "us-east-1"
+github_repository = "Zaki-Tahir/voicedesk"
+domain_name       = "staging.example.com"
+certificate_arn   = "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+
+api_desired_count    = 1
+worker_desired_count = 1
+web_desired_count    = 1
