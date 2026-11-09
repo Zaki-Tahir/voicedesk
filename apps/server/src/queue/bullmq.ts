@@ -11,7 +11,8 @@ export class BullJobQueue implements JobQueue {
 
   async enqueue<N extends JobName>(name: N, payload: JobPayloads[N]): Promise<void> {
     // A stable job id makes enqueueing idempotent if a handler retries.
-    const id = `${name}:${Object.values(payload).join(":")}`;
+    // (BullMQ reserves ":" for its own Redis keys, so it can't appear in custom ids.)
+    const id = `${name}__${Object.values(payload).join("__")}`;
     await this.queue.add(name, payload, { jobId: id });
   }
 
