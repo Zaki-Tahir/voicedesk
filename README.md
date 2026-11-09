@@ -167,6 +167,7 @@ Then:
 2. Create a `staging` environment in the GitHub repo with these variables: `AWS_REGION`,
    `AWS_DEPLOY_ROLE_ARN`, `PRIVATE_SUBNETS` (comma-separated), `TASK_SECURITY_GROUP` and `API_HOST`.
 3. Point the Twilio number's webhook at the `twilio_voice_webhook` output.
+4. Set the repository variable `DEPLOY_ENABLED` to `true`. Until then the deploy workflow is skipped.
 
 Every push to `main` that passes CI is deployed to staging by
 [deploy.yml](.github/workflows/deploy.yml): build and push images to ECR, run `prisma migrate deploy`
